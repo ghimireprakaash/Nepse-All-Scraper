@@ -3,8 +3,7 @@
 # 📈 NEPSE All Scraper
 
 **A free data pipeline for the Nepal Stock Exchange.**  
-Automatically scrapes prices, dividends, right shares, and floorsheet data  
-for **365 listed companies** — committed to this repo every trading day via GitHub Actions.
+Collects the full daily floorsheet and serves the existing price, dividend, right-share, and index history for **365 listed companies** — committed automatically via GitHub Actions.
 
 🚀 **Live API + Swagger UI:** https://ghimireprakaash.github.io/Nepse-All-Scraper/docs/  
 🌱 **Original project:** [Samir Wagle / Nepse-All-Scraper](https://github.com/SamirWagle/Nepse-All-Scraper) · [original live site](https://samirwagle.github.io/Nepse-All-Scraper/)
@@ -24,14 +23,15 @@ for **365 listed companies** — committed to this repo every trading day via Gi
 
 ## 📦 What's Inside
 
-> This repo is **data-first**. Every trading day at 6:00 PM NPT, GitHub Actions scrapes the latest data and commits it directly back to the `data/` folder. No database, no server — just flat CSV files you can plug into anything.
+> This repo is **data-first**. The scheduled GitHub Actions workflow is **floorsheet-only**: it runs every day at 6:00 PM NPT and commits new floorsheet data directly to `data/`. Price, dividend, right-share, and index histories remain available in the repo and API, but they are no longer refreshed by the schedule. No database, no server — just flat CSV files you can plug into anything.
 
 | Data | Where | Updated |
 |---|---|---|
-| OHLC price history | `data/company-wise/{SYMBOL}/prices.csv` | Locally (run once) |
-| Dividend history | `data/company-wise/{SYMBOL}/dividend.csv` | Every trading day ✅ |
-| Right share history | `data/company-wise/{SYMBOL}/right-share.csv` | Every trading day ✅ |
-| Full daily floorsheet | `data/floorsheet/floorsheet_YYYY-MM-DD.csv` | Every trading day ✅ |
+| OHLC price history | `data/company-wise/{SYMBOL}/prices.csv` | Historical (manual refresh) |
+| Dividend history | `data/company-wise/{SYMBOL}/dividend.csv` | Historical (manual refresh) |
+| Right share history | `data/company-wise/{SYMBOL}/right-share.csv` | Historical (manual refresh) |
+| Full daily floorsheet | `data/floorsheet/floorsheet_YYYY-MM-DD.csv` | Every day ✅ |
+| NEPSE index history | `data/indices/` | Historical (manual refresh) |
 
 ---
 
@@ -42,13 +42,14 @@ Nepse-All-Scraper/
 │
 ├── .github/
 │   └── workflows/
-│       └── daily_scraper.yml      # GitHub Actions — runs every trading day at 6:00 PM NPT
+│       └── daily_scraper.yml      # GitHub Actions — floorsheet-only, runs daily at 6:00 PM NPT
 │
 ├── data/
 │   ├── company_list.json          # 365 priority company symbols
 │   ├── company_id_mapping.json    # Symbol → ShareSansar internal ID
 │   ├── floorsheet/
 │   │   └── floorsheet_YYYY-MM-DD.csv  # Daily floorsheet (all trades)
+│   ├── indices/                   # NEPSE index history (historical)
 │   └── company-wise/
 │       └── {SYMBOL}/
 │           ├── prices.csv         # Full OHLC price history
@@ -56,12 +57,12 @@ Nepse-All-Scraper/
 │           └── right-share.csv    # Right share history
 │
 └── scraper/
-    ├── run_github_actions.py      # ← GitHub Actions entry point
+    ├── run_github_actions.py      # ← Floorsheet entry point (other modes retained)
     ├── run_daily.py               # ← Local price scraper CLI
     └── core/
         ├── daily.py               # Orchestrates price scraping
         ├── daily_prices.py        # Daily price summary updater
-        ├── floorsheet.py          # Floorsheet scraper (merolagani.com)
+        ├── floorsheet.py          # Legacy standalone floorsheet scraper
         └── history.py             # OHLC price history scraper
 ```
 
@@ -69,20 +70,19 @@ Nepse-All-Scraper/
 
 ## 🤖 Automation — GitHub Actions
 
-The workflow [`.github/workflows/daily_scraper.yml`](.github/workflows/daily_scraper.yml) runs automatically **every trading day (Mon–Fri) at 6:00 PM Nepal time** (12:15 UTC), right after NEPSE closes.
+The workflow [`.github/workflows/daily_scraper.yml`](.github/workflows/daily_scraper.yml) runs automatically **every day at 6:00 PM Nepal time** (12:15 UTC), right after NEPSE closes.
 
 ```
-┌─────────────────────────────────────────────────────┐
-│              GitHub Actions — Daily Run              │
-├─────────────┬───────────────────────────────────────┤
-│  Dividends  │  Updates dividend.csv (all 365)        │
-│ Right Shares│  Updates right-share.csv (all 365)     │
-│  Floorsheet │  Full day's trades from merolagani.com │
-│  Commit     │  git push → data/ auto-updated in repo │
-└─────────────┴───────────────────────────────────────┘
+┌──────────────────────────────────────────────────────┐
+│        GitHub Actions — Daily Floorsheet Run         │
+├─────────────┬────────────────────────────────────────┤
+│  Floorsheet │  Full day's trades from merolagani.com  │
+│  API build  │  Rebuilds docs/api/floorsheet/index.json│
+│  Commit     │  git push only when data/docs changed  │
+└─────────────┴────────────────────────────────────────┘
 ```
 
-> **CI mode:** the workflow only updates companies that already have a `prices.csv` — it never performs a full-history price scrape. Run the one-time full scrape locally first (see Quickstart). On the first run, index history is bootstrapped for the last 30 days.
+> **Floorsheet-only CI:** the workflow saves data under Merolagani's actual market date, so weekend and holiday runs do not create fake files. It deduplicates contract numbers and refuses to replace an existing day with a smaller scrape. Price, dividend, right-share, and index update steps are intentionally disabled in the workflow; their code, historical CSVs, and API endpoints are retained for manual refreshes.
 
 **Trigger manually**: `GitHub → Actions → Daily Scraper → Run workflow`
 
@@ -95,18 +95,16 @@ The workflow [`.github/workflows/daily_scraper.yml`](.github/workflows/daily_scr
 pip install requests beautifulsoup4
 ```
 
-### Run the same scrape as GitHub Actions (dividends + right shares + floorsheet)
+### Run the same scrape as GitHub Actions (floorsheet only)
 ```bash
-# All three in one go
-python scraper/run_github_actions.py
-
-# Or individually
-python scraper/run_github_actions.py --dividends
-python scraper/run_github_actions.py --right-shares
 python scraper/run_github_actions.py --floorsheet
 
-# Test floorsheet with limited pages (faster)
+# Preview only — does not write data
 python scraper/run_github_actions.py --floorsheet --max-pages 3
+
+# Optional historical scrapers (not run by the schedule)
+python scraper/run_github_actions.py --dividends
+python scraper/run_github_actions.py --right-shares
 ```
 
 ### Scrape full OHLC price history (local only, first-time)
@@ -122,7 +120,7 @@ python scraper/run_daily.py --new-only
 ```
 
 > **Why are prices local-only?**  
-> Price scraping needs the existing `prices.csv` files to know where to stop (incremental logic). Run it locally once, push the data, then automation handles daily updates.
+> Price scraping needs the existing `prices.csv` files to know where to stop (incremental logic). Run it locally when you want to refresh prices; the scheduled GitHub Actions workflow only handles the daily floorsheet.
 
 ---
 
@@ -152,7 +150,7 @@ https://ghimireprakaash.github.io/Nepse-All-Scraper/docs/api/status.json  # heal
 https://cdn.jsdelivr.net/gh/ghimireprakaash/Nepse-All-Scraper@main/data/company_list.json
 https://cdn.jsdelivr.net/gh/ghimireprakaash/Nepse-All-Scraper@main/data/company-wise/ADBL/prices.csv
 https://cdn.jsdelivr.net/gh/ghimireprakaash/Nepse-All-Scraper@main/data/company-wise/ADBL/dividend.csv
-https://cdn.jsdelivr.net/gh/ghimireprakaash/Nepse-All-Scraper@main/data/floorsheet/floorsheet_2026-05-04.csv
+https://cdn.jsdelivr.net/gh/ghimireprakaash/Nepse-All-Scraper@main/data/floorsheet/floorsheet_2026-11-06.csv
 ```
 
 > Symbols with `/` in the name (e.g. `GBILD86/87`) live on disk as `GBILD86-87`. Use the dashed form in URLs.
@@ -224,7 +222,7 @@ date, sn, contract_no, stock_symbol, buyer, seller, quantity, rate, amount
 
 ---
 
-## ⚙️ How Incremental Scraping Works
+## ⚙️ How Incremental Price Scraping Works (manual)
 
 ```
 prices.csv                    ShareSansar AJAX
@@ -258,14 +256,14 @@ git commit -m "chore: initial data load"
 git push
 ```
 
-From that point on, GitHub Actions handles everything automatically every trading day. ✅
+From that point on, the daily GitHub Actions workflow keeps the floorsheet updated. Use the price, dividend, and right-share scripts manually when you want to refresh those historical datasets. ✅
 
 ---
 
 ## 🗺️ Roadmap
 
 - [x] **Phase 1** — NEPSE Scraper (prices, dividends, right shares, floorsheet)
-- [x] **Phase 2** — GitHub Actions automation + incremental updates
+- [x] **Phase 2** — GitHub Actions daily floorsheet automation + manual incremental price updates
 - [ ] **Phase 3** — Frontend / API layer
 
 Want to help build Phase 3? **PRs are welcome.**

@@ -360,14 +360,16 @@ def build_snapshots(latest):
 
 def build_status(symbols, latest, fs, dividend_count, rights_count):
     """Health snapshot — drives shields.io endpoint badges."""
-    today = str(dt_date.today())
+    # The scheduled pipeline is floorsheet-only, so report the latest market
+    # date we actually have instead of the (possibly weekend) run date.
+    data_date = fs[-1]["date"] if fs else str(dt_date.today())
     coverage_pct = round(100 * len(latest) / max(len(symbols), 1), 1)
     return {
         "schemaVersion": 1,  # shields.io endpoint contract
         "label": "data",
-        "message": f"{len(symbols)} symbols · {today}",
+        "message": f"{len(symbols)} symbols · {data_date}",
         "color": "blue",
-        "scrape_date": today,
+        "scrape_date": data_date,
         "symbols_total": len(symbols),
         "symbols_with_prices": len(latest),
         "symbols_with_dividends": dividend_count,

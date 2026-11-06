@@ -1,7 +1,7 @@
 # Nepsy Scraper
 
 Scrapes NEPSE market data from ShareSansar and Merolagani for 365 priority companies.
-All data is stored as CSV files in `data/` and auto-committed by GitHub Actions.
+The scheduled GitHub Actions workflow updates the daily floorsheet. Price, dividend, and right-share histories are retained in `data/` and can be refreshed manually.
 
 > Originally based on [SamirWagle/Nepse-All-Scraper](https://github.com/SamirWagle/Nepse-All-Scraper).
 > See [../CREDITS.md](../CREDITS.md) for provenance and attribution.
@@ -12,12 +12,12 @@ All data is stored as CSV files in `data/` and auto-committed by GitHub Actions.
 
 ```
 scraper/
-├── run_github_actions.py   # GitHub Actions entry point (dividends, right shares, floorsheet)
+├── run_github_actions.py   # Floorsheet entry point (dividend/right-share modes retained)
 ├── run_daily.py            # Local price update CLI
 └── core/
     ├── daily.py            # Orchestrates price scraping
     ├── daily_prices.py     # Daily price summary updater
-    ├── floorsheet.py       # Daily floorsheet scraper (merolagani.com)
+    ├── floorsheet.py       # Legacy standalone floorsheet scraper
     └── history.py          # OHLC price history scraper (incremental)
 ```
 
@@ -25,15 +25,15 @@ scraper/
 
 ## 🤖 GitHub Actions (Automated Daily)
 
-Runs **every trading day at 6:00 PM Nepal time** via `.github/workflows/daily_scraper.yml`.
+Runs **every day at 6:00 PM Nepal time** via `.github/workflows/daily_scraper.yml`.
 
 ```
-dividends     → data/company-wise/{SYMBOL}/dividend.csv
-right-shares  → data/company-wise/{SYMBOL}/right-share.csv
-floorsheet    → data/floorsheet/floorsheet_YYYY-MM-DD.csv
+floorsheet → data/floorsheet/floorsheet_YYYY-MM-DD.csv
 ```
 
-All output is committed and pushed back to the repo automatically.
+The workflow uses Merolagani's actual market date, so weekend and holiday runs do not create fake files. It skips an existing day when the new scrape has fewer rows and deduplicates contract numbers. Dividend, right-share, price, and index steps are intentionally disabled; their code and historical files remain available for manual runs.
+
+All output is committed and pushed back to the repo automatically when data changes.
 
 ---
 
@@ -45,19 +45,20 @@ All output is committed and pushed back to the repo automatically.
 pip install requests beautifulsoup4
 ```
 
-### GitHub Actions script (dividends + right shares + floorsheet)
+### Floorsheet (used by GitHub Actions)
 
 ```bash
-# All three
-python scraper/run_github_actions.py
-
-# Individual
-python scraper/run_github_actions.py --dividends
-python scraper/run_github_actions.py --right-shares
 python scraper/run_github_actions.py --floorsheet
 
-# Test floorsheet with limited pages
+# Preview only — does not write data
 python scraper/run_github_actions.py --floorsheet --max-pages 3
+```
+
+### Optional historical scrapers (not scheduled)
+
+```bash
+python scraper/run_github_actions.py --dividends
+python scraper/run_github_actions.py --right-shares
 ```
 
 ### Price history (run locally)
@@ -99,7 +100,7 @@ date, sn, contract_no, stock_symbol, buyer, seller, quantity, rate, amount
 
 ---
 
-## ⚙️ How Incremental Price Scraping Works
+## ⚙️ How Incremental Price Scraping Works (manual)
 
 `history.py` reads the latest date from `prices.csv`, then passes it as a `stop_date` to the AJAX paginator. The moment it encounters a record older than `stop_date`, it stops fetching — so a daily update fetches only 1-2 pages instead of 70+ pages.
 
@@ -117,4 +118,4 @@ date, sn, contract_no, stock_symbol, buyer, seller, quantity, rate, amount
    git commit -m "chore: initial data load"
    git push
    ```
-3. GitHub Actions will keep everything updated automatically from then on.
+3. GitHub Actions will keep the daily floorsheet updated from then on. Run the price, dividend, or right-share commands manually to refresh those historical datasets.

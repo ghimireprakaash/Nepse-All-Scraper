@@ -2,8 +2,10 @@ name: Daily Scraper
 
 on:
   schedule:
-    # Runs at 6:00 PM Nepal time (12:15 UTC) on trading days (Mon–Fri) — after NEPSE closes at 3 PM
-    - cron: "15 12 * * 1-5"
+    # Runs every day at 6:00 PM Nepal time (12:15 UTC) — after NEPSE closes at 3 PM.
+    # The pipeline is floorsheet-only; non-trading days are safe because the scraper
+    # uses Merolagani's actual market date and skips an existing day's file.
+    - cron: "15 12 * * *"
   workflow_dispatch:  # allow manual trigger from GitHub UI
   push:
     branches:
@@ -39,24 +41,30 @@ jobs:
         run: |
           pip install requests beautifulsoup4
 
-      - name: Update company prices (incremental)
-        run: |
-          cd scraper
-          python run_daily.py --incremental --skip-new
-
-      - name: Run dividend scraper
-        run: python scraper/run_github_actions.py --dividends
-
-      - name: Run right-share scraper
-        run: python scraper/run_github_actions.py --right-shares
-
       - name: Run floorsheet scraper
         run: python scraper/run_github_actions.py --floorsheet
 
-      - name: Update NEPSE main + sub-index history
-        run: |
-          cd scraper
-          python -m core.indices --bootstrap-days 30
+      # ------------------------------------------------------------------
+      # Intentionally disabled: dividends, right shares, prices and indices.
+      # Their scrapers, historical CSVs and API outputs remain in the repo.
+      # Re-enable these steps manually if you want to refresh those datasets.
+      #
+      # - name: Update company prices (incremental)
+      #   run: |
+      #     cd scraper
+      #     python run_daily.py --incremental --skip-new
+      #
+      # - name: Run dividend scraper
+      #   run: python scraper/run_github_actions.py --dividends
+      #
+      # - name: Run right-share scraper
+      #   run: python scraper/run_github_actions.py --right-shares
+      #
+      # - name: Update NEPSE main + sub-index history
+      #   run: |
+      #     cd scraper
+      #     python -m core.indices --bootstrap-days 30
+      # ------------------------------------------------------------------
 
       - name: Build static JSON API + Swagger UI
         run: python scraper/build_api.py
@@ -74,7 +82,7 @@ jobs:
           git add data/ docs/
           git add --renormalize data/ docs/
           git diff --cached --quiet && exit 0
-          git commit -m "chore: daily scrape $(date -u +'%Y-%m-%d')"
+          git commit -m "chore: daily floorsheet $(date -u +'%Y-%m-%d')"
           for i in 1 2 3 4 5; do
             git fetch origin main
             git rebase origin/main

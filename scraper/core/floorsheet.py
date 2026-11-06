@@ -1,3 +1,5 @@
+# Legacy standalone scraper. The scheduled GitHub Actions entry point is
+# scraper/run_github_actions.py, which has the same market-date and file guards.
 import requests
 from bs4 import BeautifulSoup
 import csv
@@ -6,7 +8,6 @@ import logging
 import os
 import re
 import random
-from datetime import date as dt_date
 
 # Setup logging
 debug_dir = os.path.join(os.path.dirname(__file__), 'debug_output')
@@ -34,7 +35,19 @@ class FloorsheetScraper:
             "Referer": "https://merolagani.com/Floorsheet.aspx"
         })
         self.url = "https://merolagani.com/Floorsheet.aspx"
-        
+        self.market_date = None
+
+    def _parse_market_date(self, soup):
+        """Return Merolagani's actual market date as YYYY-MM-DD, or None."""
+        el = soup.find(id="ctl00_ContentPlaceHolder1_marketDate") or soup.find(id=re.compile(r"marketDate$"))
+        if not el:
+            return None
+        text = el.get_text(" ", strip=True)
+        match = re.search(r"(\d{4})/(\d{1,2})/(\d{1,2})", text)
+        if not match:
+            return None
+        return f"{match.group(1)}-{int(match.group(2)):02d}-{int(match.group(3)):02d}"
+
     def __enter__(self):
         return self
 
@@ -60,6 +73,12 @@ class FloorsheetScraper:
                 return []
                 
             soup = BeautifulSoup(response.text, 'html.parser')
+            self.market_date = self._parse_market_date(soup)
+            if not self.market_date:
+                logger.error("Could not determine Merolagani market date; refusing to scrape.")
+                return []
+            logger.info(f"Market date: {self.market_date}")
+
             all_records = []
             page_num = 1
             
@@ -80,7 +99,7 @@ class FloorsheetScraper:
                     
                     try:
                         record = {
-                            'date': str(dt_date.today()),   # YYYY-MM-DD
+                            'date': self.market_date,   # YYYY-MM-DD
                             'sn': cols[0].get_text(strip=True),
                             'contract_no': cols[1].get_text(strip=True),
                             'stock_symbol': cols[2].get_text(strip=True),
@@ -171,7 +190,15 @@ class FloorsheetScraper:
                 soup = BeautifulSoup(response.text, 'html.parser')
                 page_num += 1
                 
-            return all_records
+            seen = set()
+            unique_records = []
+            for record in all_records:
+                key = record['contract_no'] or record['sn']
+                if key in seen:
+                    continue
+                seen.add(key)
+                unique_records.append(record)
+            return unique_records
 
         except Exception as e:
             logger.error(f"Scraping failed: {e}")
@@ -188,15 +215,28 @@ if __name__ == "__main__":
     scraper = FloorsheetScraper()
     data = scraper.scrape_floorsheet(max_pages=args.max_pages)
 
-    if not data:
+    if args.max_pages:
+        print(f"Preview only: {len(data)} rows for {scraper.market_date}; not saving because --max-pages was used.")
+    elif not data:
         print("No data scraped.")
     else:
-        today = str(dt_date.today())   # e.g. 2026-02-21
+        trade_date = scraper.market_date
+        if not trade_date:
+            print("No market date; refusing to save.")
+            raise SystemExit(1)
+
         data_dir = os.path.join(os.path.dirname(__file__), '..', '..', 'data', 'floorsheet')
         os.makedirs(data_dir, exist_ok=True)
 
-        # One CSV per day, overwritten on re-run (same layout as the Actions scraper).
-        csv_path = os.path.join(data_dir, f'floorsheet_{today}.csv')
+        # One CSV per market day; never replace it with a smaller scrape.
+        csv_path = os.path.join(data_dir, f'floorsheet_{trade_date}.csv')
+        if os.path.exists(csv_path):
+            with open(csv_path, newline='', encoding='utf-8') as f:
+                existing_count = sum(1 for _ in csv.DictReader(f))
+            if len(data) < existing_count:
+                print(f"Keeping existing {csv_path} ({existing_count} rows); new scrape has {len(data)}.")
+                raise SystemExit(0)
+
         fieldnames = ['date', 'sn', 'contract_no', 'stock_symbol', 'buyer', 'seller', 'quantity', 'rate', 'amount']
         with open(csv_path, 'w', newline='', encoding='utf-8') as f:
             writer = csv.DictWriter(f, fieldnames=fieldnames, lineterminator='\n')

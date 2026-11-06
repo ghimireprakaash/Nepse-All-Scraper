@@ -2,23 +2,26 @@
 run_github_actions.py
 =====================
 Daily scraper designed for GitHub Actions.
-Scrapes for ALL priority companies (company_list.json):
+The scheduled workflow runs the floorsheet only:
+  Floorsheet -> data/floorsheet/floorsheet_YYYY-MM-DD.csv
+
+The dividend and right-share modes below are retained for manual use:
   1. Dividend history    -> data/company-wise/{SYMBOL}/dividend.csv
   2. Right share history -> data/company-wise/{SYMBOL}/right-share.csv
-  3. Floorsheet          -> data/floorsheet/floorsheet_YYYY-MM-DD.csv
 
 Usage (locally or in GitHub Actions):
   python scraper/run_github_actions.py                  # all 3
   python scraper/run_github_actions.py --dividends      # dividends only
   python scraper/run_github_actions.py --right-shares   # right shares only
   python scraper/run_github_actions.py --floorsheet     # floorsheet only
-  python scraper/run_github_actions.py --floorsheet --max-pages 5   # test
+  python scraper/run_github_actions.py --floorsheet --max-pages 5   # preview only
 """
 
 import sys
 import os
 import csv
 import json
+import re
 import time
 import random
 import logging
@@ -28,7 +31,6 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from bs4 import BeautifulSoup
 from pathlib import Path
-from datetime import date as dt_date
 
 # ── Paths ──────────────────────────────────────────────────────────────────
 ROOT = Path(__file__).resolve().parent.parent
@@ -336,10 +338,24 @@ def _get_floorsheet_hidden(soup):
     return {i["name"]: i.get("value", "") for i in soup.find_all("input", type="hidden") if i.get("name")}
 
 
+def parse_floorsheet_market_date(soup):
+    """Return Merolagani's actual market date as YYYY-MM-DD, or None."""
+    el = soup.find(id="ctl00_ContentPlaceHolder1_marketDate") or soup.find(id=re.compile(r"marketDate$"))
+    if not el:
+        return None
+    text = el.get_text(" ", strip=True)
+    m = re.search(r"(\d{4})/(\d{1,2})/(\d{1,2})", text)
+    if not m:
+        return None
+    return f"{m.group(1)}-{int(m.group(2)):02d}-{int(m.group(3)):02d}"
+
+
 def scrape_floorsheet(max_pages=None):
-    """Scrape today's full floorsheet from merolagani. Returns list of records."""
-    import re
-    today = str(dt_date.today())
+    """Scrape the current floorsheet from merolagani.
+
+    Returns (records, complete). ``complete`` is False if pagination stopped
+    early because of an error or the ``max_pages`` preview limit.
+    """
     fs_session = make_session()
     fs_session.headers.update({
         "Origin": "https://merolagani.com",
@@ -361,20 +377,27 @@ def scrape_floorsheet(max_pages=None):
             time.sleep(wait)
     if resp is None:
         log.error(f"Floorsheet: all initial GET attempts failed: {last_err}")
-        return []
+        return [], False
     if resp.status_code != 200:
         log.error(f"Floorsheet: failed to load page ({resp.status_code})")
-        return []
+        return [], False
 
     soup = BeautifulSoup(resp.text, "html.parser")
+    trade_date = parse_floorsheet_market_date(soup)
+    if not trade_date:
+        log.error("Floorsheet: could not determine the market date; refusing to save the scrape")
+        return [], False
+    log.info(f"Floorsheet: market date is {trade_date}")
     all_records = []
     page_num = 1
+    complete = True
 
     while True:
         log.info(f"Floorsheet: page {page_num}...")
         table = soup.find("table", class_="table-bordered")
         if not table:
             log.warning("Floorsheet: table not found")
+            complete = False
             break
 
         for row in table.find("tbody").find_all("tr"):
@@ -382,7 +405,7 @@ def scrape_floorsheet(max_pages=None):
             if len(cols) < 8:
                 continue
             all_records.append({
-                "date":         today,
+                "date":         trade_date,
                 "sn":           cols[0].get_text(strip=True),
                 "contract_no":  cols[1].get_text(strip=True),
                 "stock_symbol": cols[2].get_text(strip=True),
@@ -394,6 +417,7 @@ def scrape_floorsheet(max_pages=None):
             })
 
         if max_pages and page_num >= max_pages:
+            complete = False
             break
 
         next_btn = soup.find("a", title="Next Page") or soup.find("a", string="Next")
@@ -403,12 +427,14 @@ def scrape_floorsheet(max_pages=None):
         onclick = next_btn.get("onclick", "")
         m = re.search(r"changePageIndex\(['\"]([^'\"]+)['\"],\s*['\"]([^'\"]+)['\"],\s*['\"]([^'\"]+)['\"]", onclick)
         if not m:
+            complete = False
             break
 
         next_page_num, hidden_field_id, submit_btn_id = m.group(1), m.group(2), m.group(3)
         hidden_input = soup.find(id=hidden_field_id)
         submit_input = soup.find(id=submit_btn_id)
         if not hidden_input or not submit_input:
+            complete = False
             break
 
         payload = _get_floorsheet_hidden(soup)
@@ -429,28 +455,93 @@ def scrape_floorsheet(max_pages=None):
                 time.sleep(wait)
         if post_resp is None:
             log.warning(f"Floorsheet: page {page_num + 1} all POST attempts failed: {post_err}; stopping pagination")
+            complete = False
             break
         resp = post_resp
         if resp.status_code != 200:
+            complete = False
             break
         soup = BeautifulSoup(resp.text, "html.parser")
         page_num += 1
 
-    log.info(f"Floorsheet: scraped {len(all_records)} records")
-    return all_records
+    suffix = "" if complete else " (incomplete)"
+    log.info(f"Floorsheet: scraped {len(all_records)} records{suffix}")
+    return all_records, complete
+
+
+def _floorsheet_key(record):
+    """Stable duplicate key for a floorsheet row."""
+    contract_no = (record.get("contract_no") or "").strip()
+    if contract_no:
+        return ("contract_no", contract_no)
+    return ("sn", (record.get("sn") or "").strip())
+
+
+def _dedupe_floorsheet(records):
+    """Drop repeated rows, which can happen if pagination overlaps."""
+    seen = set()
+    deduped = []
+    for record in records:
+        key = _floorsheet_key(record)
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(record)
+    return deduped
 
 
 def save_floorsheet(records):
-    """Save to data/floorsheet/floorsheet_YYYY-MM-DD.csv (overwrites if re-run same day)."""
-    if not records:
-        return
-    today = str(dt_date.today())
-    ensure_dir(FLOORSHEET_DIR)
+    """Save to data/floorsheet/floorsheet_YYYY-MM-DD.csv using Merolagani's market date.
 
-    csv_path = FLOORSHEET_DIR / f"floorsheet_{today}.csv"
+    Safety rules:
+    - Never create a weekend/holiday file using the run date.
+    - Never replace an existing day with a smaller scrape.
+    - Skip writing when the existing file already has the same rows.
+    """
+    if not records:
+        log.info("Floorsheet: no records to save")
+        return False
+
+    records = _dedupe_floorsheet(records)
+    trade_date = (records[0].get("date") or "").strip()
+    if not trade_date:
+        log.error("Floorsheet: records are missing the market date; refusing to save")
+        return False
+
+    ensure_dir(FLOORSHEET_DIR)
+    csv_path = FLOORSHEET_DIR / f"floorsheet_{trade_date}.csv"
+
+    if csv_path.exists():
+        try:
+            with open(csv_path, newline="", encoding="utf-8") as f:
+                existing_rows = list(csv.DictReader(f))
+        except Exception as e:
+            log.warning(f"Floorsheet: could not read existing {csv_path.name} ({e}); overwriting")
+            existing_rows = []
+
+        if len(records) < len(existing_rows):
+            log.warning(
+                f"Floorsheet: new scrape has {len(records)} rows but {csv_path.name} "
+                f"already has {len(existing_rows)}; keeping existing file"
+            )
+            return False
+
+        if len(records) == len(existing_rows):
+            existing_set = {
+                tuple((row.get(field) or "").strip() for field in FLOORSHEET_FIELDS)
+                for row in existing_rows
+            }
+            new_set = {
+                tuple((row.get(field) or "").strip() for field in FLOORSHEET_FIELDS)
+                for row in records
+            }
+            if existing_set == new_set:
+                log.info(f"Floorsheet: {csv_path.name} already up to date ({len(records)} rows); skipping")
+                return False
 
     overwrite_csv(csv_path, FLOORSHEET_FIELDS, records)
-    log.info(f"Floorsheet: saved -> {csv_path}")
+    log.info(f"Floorsheet: saved {len(records)} rows -> {csv_path}")
+    return True
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -485,9 +576,22 @@ def run_right_shares():
 
 def run_floorsheet(max_pages=None):
     log.info("=== Floorsheet scrape ===")
-    records = scrape_floorsheet(max_pages=max_pages)
-    save_floorsheet(records)
-    log.info("=== Floorsheet complete ===")
+    records, complete = scrape_floorsheet(max_pages=max_pages)
+    if max_pages:
+        if records:
+            log.info(
+                f"Floorsheet: preview only ({len(records)} rows, market date {records[0]['date']}); "
+                "not saving because --max-pages was used"
+            )
+        else:
+            log.info("Floorsheet: preview only; no records scraped")
+        log.info("=== Floorsheet complete ===")
+        return False
+    if not complete:
+        log.warning("Floorsheet: scrape did not finish; the existing file will only be replaced if this has more rows")
+    changed = save_floorsheet(records)
+    log.info(f"=== Floorsheet complete ({'updated' if changed else 'no change'}) ===")
+    return changed
 
 
 # ═══════════════════════════════════════════════════════════════════════════
