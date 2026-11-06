@@ -85,7 +85,9 @@ class DailySummaryUpdater:
                 try:
                     existing_df = pd.read_csv(csv_file)
                     if len(existing_df) > 0:
-                        last_date = str(existing_df.iloc[-1]['date'])
+                        # History batches are appended in fetch order (often newest-first),
+                        # so the final row is not guaranteed to be the latest date.
+                        last_date = str(existing_df['date'].max())
                         
                         if last_date == today:
                             skipped_count += 1
