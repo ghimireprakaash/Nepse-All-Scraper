@@ -22,7 +22,8 @@ Changes made in this derivative include:
 - Unified floorsheet output under `data/floorsheet/` as CSV only.
 - Fixed `build_api.py` when `data/company-wise/` does not exist yet.
 - Sorted per-symbol price JSON oldest-to-newest so `latest.json`, snapshots, and `data[-1]` return the actual latest row.
-- Added GitHub Pages deployment via GitHub Actions.
+- Seeded the upstream price, dividend, right-share, and index history (the full floorsheet archive was excluded).
+- Enabled GitHub Pages publishing for the generated `docs/` site.
 
 ## Data provenance
 
