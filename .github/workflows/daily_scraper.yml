@@ -1,0 +1,85 @@
+name: Daily Scraper
+
+on:
+  schedule:
+    # Runs at 6:00 PM Nepal time (12:15 UTC) on trading days (Mon–Fri) — after NEPSE closes at 3 PM
+    - cron: "15 12 * * 1-5"
+  workflow_dispatch:  # allow manual trigger from GitHub UI
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/daily_scraper.yml"
+
+concurrency:
+  group: daily-scraper-main
+  cancel-in-progress: false
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # needed to git push scraped data back to repo
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: main
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install requests beautifulsoup4
+
+      - name: Update company prices (incremental)
+        run: |
+          cd scraper
+          python run_daily.py --incremental
+
+      - name: Run dividend scraper
+        run: python scraper/run_github_actions.py --dividends
+
+      - name: Run right-share scraper
+        run: python scraper/run_github_actions.py --right-shares
+
+      - name: Run floorsheet scraper
+        run: python scraper/run_github_actions.py --floorsheet
+
+      - name: Update NEPSE main + sub-index history
+        run: |
+          cd scraper
+          python -m core.indices
+
+      - name: Build static JSON API + Swagger UI
+        run: python scraper/build_api.py
+        env:
+          GH_USER: ${{ github.repository_owner }}
+          GH_REPO: ${{ github.event.repository.name }}
+          GH_BRANCH: main
+
+      - name: Commit and push updated data
+        run: |
+          set -euo pipefail
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git add data/ docs/
+          git add --renormalize data/ docs/
+          git diff --cached --quiet && exit 0
+          git commit -m "chore: daily scrape $(date -u +'%Y-%m-%d')"
+          for i in 1 2 3 4 5; do
+            git fetch origin main
+            git rebase origin/main
+            git push origin HEAD:main && exit 0
+            echo "Push attempt $i failed; retrying..."
+            sleep 5
+          done
+          echo "Push failed after 5 attempts"
+          exit 1
