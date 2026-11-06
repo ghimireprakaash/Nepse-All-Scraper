@@ -5,7 +5,7 @@ Daily scraper designed for GitHub Actions.
 Scrapes for ALL priority companies (company_list.json):
   1. Dividend history    -> data/company-wise/{SYMBOL}/dividend.csv
   2. Right share history -> data/company-wise/{SYMBOL}/right-share.csv
-  3. Floorsheet          -> data/floorsheet_YYYY-MM-DD.csv + .json
+  3. Floorsheet          -> data/floorsheet/floorsheet_YYYY-MM-DD.csv
 
 Usage (locally or in GitHub Actions):
   python scraper/run_github_actions.py                  # all 3
@@ -35,7 +35,7 @@ ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT / "data"
 COMPANY_WISE = DATA_DIR / "company-wise"
 FLOORSHEET_DIR = DATA_DIR / "floorsheet"
-COMPANY_LIST = Path(__file__).resolve().parent / "company_list.json"
+COMPANY_LIST = DATA_DIR / "company_list.json"
 
 # ── Logging ────────────────────────────────────────────────────────────────
 logging.basicConfig(

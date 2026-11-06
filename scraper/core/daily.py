@@ -58,13 +58,20 @@ class DailyScraperManager:
     # Price scraping
     # ------------------------------------------------------------------
 
-    def _update_prices(self, symbols, force_full=False):
+    def _update_prices(self, symbols, force_full=False, skip_new=False):
         """Scrape / update prices.csv for the given symbols."""
         existing_dirs = self.get_existing_companies()
         # Dirs use '-' instead of '/' (e.g. GBILD86/87 -> GBILD86-87). Normalize for comparison.
         existing = {d.replace('-', '/') if d.replace('-', '/') in symbols else d for d in existing_dirs}
         new_companies = symbols - existing
         existing_priority = symbols & existing
+
+        if skip_new and new_companies:
+            logger.info(
+                f"Skipping {len(new_companies)} new symbols (full-history scrape is local-only; "
+                "run --full-scrape locally)"
+            )
+            new_companies = set()
 
         logger.info(f"Prices — new: {len(new_companies)}, existing: {len(existing_priority)}")
 
@@ -102,7 +109,7 @@ class DailyScraperManager:
     # Main entry point
     # ------------------------------------------------------------------
 
-    def run_daily_update(self, check_new_only=False, force_full=False, priority_only=True):
+    def run_daily_update(self, check_new_only=False, force_full=False, priority_only=True, skip_new=False):
         """
         Run the daily update:
           - Refresh company ID mapping (catches new IPOs)
@@ -111,6 +118,7 @@ class DailyScraperManager:
         :param check_new_only: Only scrape NEW companies (prices), skip existing.
         :param force_full:     Force full re-scrape of prices.
         :param priority_only:  Use company_list.json filter (always True in practice).
+        :param skip_new:       Never full-scrape symbols without an existing prices.csv (CI mode).
         """
         logger.info("=== Daily Update Started ===")
 
@@ -119,7 +127,7 @@ class DailyScraperManager:
 
         if not check_new_only:
             logger.info("--- Updating prices ---")
-            self._update_prices(target, force_full=force_full)
+            self._update_prices(target, force_full=force_full, skip_new=skip_new)
         else:
             logger.info("--- New companies only (prices) ---")
             existing = self.get_existing_companies()
@@ -133,10 +141,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="ShareSansar Daily Scraper (prices)")
     parser.add_argument("--new-only", action="store_true", help="Only scrape new companies (prices)")
     parser.add_argument("--full-scrape", action="store_true", help="Force full price re-scrape")
+    parser.add_argument("--skip-new", action="store_true", help="Never full-scrape companies without prices.csv")
     args = parser.parse_args()
 
     manager = DailyScraperManager()
     manager.run_daily_update(
         check_new_only=args.new_only,
         force_full=args.full_scrape,
+        skip_new=args.skip_new,
     )

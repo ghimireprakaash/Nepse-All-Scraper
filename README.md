@@ -28,7 +28,7 @@ for **365 listed companies** — committed to this repo every trading day via Gi
 | OHLC price history | `data/company-wise/{SYMBOL}/prices.csv` | Locally (run once) |
 | Dividend history | `data/company-wise/{SYMBOL}/dividend.csv` | Every trading day ✅ |
 | Right share history | `data/company-wise/{SYMBOL}/right-share.csv` | Every trading day ✅ |
-| Full daily floorsheet | `data/floorsheet_YYYY-MM-DD.csv` + `.json` | Every trading day ✅ |
+| Full daily floorsheet | `data/floorsheet/floorsheet_YYYY-MM-DD.csv` | Every trading day ✅ |
 
 ---
 
@@ -44,8 +44,8 @@ Nepse-All-Scraper/
 ├── data/
 │   ├── company_list.json          # 365 priority company symbols
 │   ├── company_id_mapping.json    # Symbol → ShareSansar internal ID
-│   ├── floorsheet_YYYY-MM-DD.csv  # Daily floorsheet (all trades)
-│   ├── floorsheet_YYYY-MM-DD.json # Same data as JSON
+│   ├── floorsheet/
+│   │   └── floorsheet_YYYY-MM-DD.csv  # Daily floorsheet (all trades)
 │   └── company-wise/
 │       └── {SYMBOL}/
 │           ├── prices.csv         # Full OHLC price history
@@ -78,6 +78,8 @@ The workflow [`.github/workflows/daily_scraper.yml`](.github/workflows/daily_scr
 │  Commit     │  git push → data/ auto-updated in repo │
 └─────────────┴───────────────────────────────────────┘
 ```
+
+> **CI mode:** the workflow only updates companies that already have a `prices.csv` — it never performs a full-history price scrape. Run the one-time full scrape locally first (see Quickstart). On the first run, index history is bootstrapped for the last 30 days.
 
 **Trigger manually**: `GitHub → Actions → Daily Scraper → Run workflow`
 
@@ -208,7 +210,7 @@ ratio, total_units, issue_price, opening_date, closing_date, status, issue_manag
 </details>
 
 <details>
-<summary><strong>floorsheet_YYYY-MM-DD.csv</strong></summary>
+<summary><strong>floorsheet/floorsheet_YYYY-MM-DD.csv</strong></summary>
 
 ```
 date, sn, contract_no, stock_symbol, buyer, seller, quantity, rate, amount

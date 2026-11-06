@@ -14,8 +14,6 @@ ENV/
 # *.csv  <-- Commented out
 # *.json <-- Commented out
 
-# Ignore large/temp data if needed
-data/floorsheet_*.json
 # storage/
 
 # Debug output

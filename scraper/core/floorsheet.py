@@ -1,6 +1,5 @@
 import requests
 from bs4 import BeautifulSoup
-import json
 import csv
 import time
 import logging
@@ -193,24 +192,16 @@ if __name__ == "__main__":
         print("No data scraped.")
     else:
         today = str(dt_date.today())   # e.g. 2026-02-21
-        data_dir = os.path.join(os.path.dirname(__file__), '..', '..', 'data')
+        data_dir = os.path.join(os.path.dirname(__file__), '..', '..', 'data', 'floorsheet')
         os.makedirs(data_dir, exist_ok=True)
 
-        # ------- CSV (append-safe, one file per day) -------
+        # One CSV per day, overwritten on re-run (same layout as the Actions scraper).
         csv_path = os.path.join(data_dir, f'floorsheet_{today}.csv')
         fieldnames = ['date', 'sn', 'contract_no', 'stock_symbol', 'buyer', 'seller', 'quantity', 'rate', 'amount']
-        file_exists = os.path.isfile(csv_path)
-        with open(csv_path, 'a', newline='', encoding='utf-8') as f:
+        with open(csv_path, 'w', newline='', encoding='utf-8') as f:
             writer = csv.DictWriter(f, fieldnames=fieldnames, lineterminator='\n')
-            if not file_exists:
-                writer.writeheader()
+            writer.writeheader()
             writer.writerows(data)
 
-        # ------- JSON (full dump for the day, overwrites) -------
-        json_path = os.path.join(data_dir, f'floorsheet_{today}.json')
-        with open(json_path, 'w', encoding='utf-8') as f:
-            json.dump(data, f, indent=2)
-
         print(f"Saved {len(data)} records to:")
-        print(f"  CSV:  {csv_path}")
-        print(f"  JSON: {json_path}")
+        print(f"  CSV: {csv_path}")

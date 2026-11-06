@@ -60,8 +60,10 @@ def build_companies():
     list_path = DATA / "company_list.json"
     with open(list_path) as f:
         priority = set(json.load(f))
-    on_disk = {d.name.replace("-", "/") if d.name.replace("-", "/") in priority else d.name
-               for d in COMPANY_WISE.iterdir() if d.is_dir()}
+    on_disk = set()
+    if COMPANY_WISE.exists():
+        on_disk = {d.name.replace("-", "/") if d.name.replace("-", "/") in priority else d.name
+                   for d in COMPANY_WISE.iterdir() if d.is_dir()}
     return sorted(priority | on_disk)
 
 
@@ -76,9 +78,12 @@ def build_per_symbol(symbols):
 
         prices = csv_to_records(sym_dir / "prices.csv")
         if prices:
+            # ShareSansar returns newest-first and update_company_csv appends batches in
+            # fetch order, so sort oldest -> newest to make data[-1] the latest row.
+            prices.sort(key=lambda r: r.get("date", ""))
             write_json(API / "prices" / f"{slug}.json",
                        {"symbol": sym, "count": len(prices), "data": prices})
-            latest[sym] = prices[-1] if prices else None
+            latest[sym] = prices[-1]
 
         divs = csv_to_records(sym_dir / "dividend.csv")
         if divs:

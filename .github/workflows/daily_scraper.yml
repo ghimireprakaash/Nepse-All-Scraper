@@ -18,6 +18,7 @@ concurrency:
 jobs:
   scrape:
     runs-on: ubuntu-latest
+    timeout-minutes: 120
     permissions:
       contents: write   # needed to git push scraped data back to repo
 
@@ -41,7 +42,7 @@ jobs:
       - name: Update company prices (incremental)
         run: |
           cd scraper
-          python run_daily.py --incremental
+          python run_daily.py --incremental --skip-new
 
       - name: Run dividend scraper
         run: python scraper/run_github_actions.py --dividends
@@ -55,7 +56,7 @@ jobs:
       - name: Update NEPSE main + sub-index history
         run: |
           cd scraper
-          python -m core.indices
+          python -m core.indices --bootstrap-days 30
 
       - name: Build static JSON API + Swagger UI
         run: python scraper/build_api.py

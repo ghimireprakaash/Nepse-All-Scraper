@@ -17,6 +17,7 @@ def main():
     parser.add_argument("--full-scrape", action="store_true", help="Force full scraping of all existing companies (slow)")
     parser.add_argument("--incremental", action="store_true", default=True, help="Default mode: Check existing companies for NEW updates only (fast)")
     parser.add_argument("--all-companies", action="store_true", help="Scrape ALL companies found, ignoring the priority list.")
+    parser.add_argument("--skip-new", action="store_true", help="Only update symbols that already have prices.csv (CI mode; never full-scrape)")
     
     args = parser.parse_args()
     
@@ -32,7 +33,7 @@ def main():
         manager.run_daily_update(force_full=True, priority_only=priority_only)
     else:
         print("Running STANDARD DAILY UPDATE (New Companies + Incremental Updates)...")
-        manager.run_daily_update(force_full=False, priority_only=priority_only)
+        manager.run_daily_update(force_full=False, priority_only=priority_only, skip_new=args.skip_new)
 
 if __name__ == "__main__":
     main()

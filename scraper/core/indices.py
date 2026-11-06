@@ -111,7 +111,12 @@ def _write_csv(path: Path, rows: list):
         w.writerows(rows)
 
 
-def update_indices(start: date | None = None, end: date | None = None, max_misses: int = 90):
+def update_indices(
+    start: date | None = None,
+    end: date | None = None,
+    max_misses: int = 90,
+    bootstrap_days: int | None = None,
+):
     """
     Append new daily index rows to data/indices/{slug}.csv for each index.
 
@@ -119,6 +124,8 @@ def update_indices(start: date | None = None, end: date | None = None, max_misse
     `end` defaults to today.
     `max_misses` aborts the loop after that many consecutive empty days.
     Default 90 covers Dashain+Tihar (~3 weeks) and the 2020 COVID closure (~60 days).
+    `bootstrap_days` limits the backfill window when no index data exists yet
+    (prevents a first CI run from crawling all the way back to 2010).
     """
     INDICES_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -130,7 +137,12 @@ def update_indices(start: date | None = None, end: date | None = None, max_misse
         break  # only need one — all files have same date set
 
     if start is None:
-        start = max((date.fromisoformat(d) for d in existing_dates), default=date(2010, 1, 1)) + timedelta(days=1)
+        if existing_dates:
+            start = max(date.fromisoformat(d) for d in existing_dates) + timedelta(days=1)
+        elif bootstrap_days is not None:
+            start = date.today() - timedelta(days=bootstrap_days)
+        else:
+            start = date(2010, 1, 1) + timedelta(days=1)
     if end is None:
         end = date.today()
 
@@ -205,5 +217,15 @@ def update_indices(start: date | None = None, end: date | None = None, max_misse
 
 
 if __name__ == "__main__":
+    import argparse
+
     logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(levelname)-7s  %(message)s")
-    update_indices()
+    parser = argparse.ArgumentParser(description="Scrape NEPSE main + sub-index history")
+    parser.add_argument(
+        "--bootstrap-days",
+        type=int,
+        default=None,
+        help="When no index data exists yet, backfill only the last N days (default: from 2010)",
+    )
+    args = parser.parse_args()
+    update_indices(bootstrap_days=args.bootstrap_days)

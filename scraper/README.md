@@ -27,7 +27,7 @@ Runs **every trading day at 6:00 PM Nepal time** via `.github/workflows/daily_sc
 ```
 dividends     → data/company-wise/{SYMBOL}/dividend.csv
 right-shares  → data/company-wise/{SYMBOL}/right-share.csv
-floorsheet    → data/floorsheet_YYYY-MM-DD.csv + .json
+floorsheet    → data/floorsheet/floorsheet_YYYY-MM-DD.csv
 ```
 
 All output is committed and pushed back to the repo automatically.
@@ -89,7 +89,7 @@ fiscal_year, bonus_share, cash_dividend, total_dividend, book_closure_date
 ratio, total_units, issue_price, opening_date, closing_date, status, issue_manager
 ```
 
-### `data/floorsheet_YYYY-MM-DD.csv`
+### `data/floorsheet/floorsheet_YYYY-MM-DD.csv`
 ```
 date, sn, contract_no, stock_symbol, buyer, seller, quantity, rate, amount
 ```
