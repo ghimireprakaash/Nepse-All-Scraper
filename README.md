@@ -2,20 +2,23 @@
 
 # 📈 NEPSE All Scraper
 
-**A free, open-source data pipeline for the Nepal Stock Exchange.**  
+**A free data pipeline for the Nepal Stock Exchange.**  
 Automatically scrapes prices, dividends, right shares, and floorsheet data  
 for **365 listed companies** — committed to this repo every trading day via GitHub Actions.
 
-🚀 **Live API + Swagger UI:** https://ghimireprakaash.github.io/Nepse-All-Scraper/docs/
+🚀 **Live API + Swagger UI:** https://ghimireprakaash.github.io/Nepse-All-Scraper/docs/  
+🌱 **Original project:** [Samir Wagle / Nepse-All-Scraper](https://github.com/SamirWagle/Nepse-All-Scraper) · [original live site](https://samirwagle.github.io/Nepse-All-Scraper/)
 
 [![Daily Scraper](https://github.com/ghimireprakaash/Nepse-All-Scraper/actions/workflows/daily_scraper.yml/badge.svg)](https://github.com/ghimireprakaash/Nepse-All-Scraper/actions/workflows/daily_scraper.yml)
 [![Latest Scrape](https://img.shields.io/endpoint?url=https://ghimireprakaash.github.io/Nepse-All-Scraper/docs/api/status.json&label=latest+scrape)](https://ghimireprakaash.github.io/Nepse-All-Scraper/docs/api/status.json)
 ![Python](https://img.shields.io/badge/Python-3.11-blue?logo=python&logoColor=white)
 ![Data Source](https://img.shields.io/badge/Source-ShareSansar%20%7C%20Merolagani-orange)
-![License](https://img.shields.io/badge/License-Educational-green)
+[![License](https://img.shields.io/badge/License-See%20CREDITS-lightgrey)](CREDITS.md)
 ![Companies](https://img.shields.io/badge/Companies-365-purple)
 
 </div>
+
+> **Origin & Credits:** This project was originally created by **Samir Wagle** ([@SamirWagle](https://github.com/SamirWagle)). This repository is a derivative maintained by **Prakash Ghimire** ([@ghimireprakaash](https://github.com/ghimireprakaash)). The original scraper, data pipeline, and API design are his work; see [CREDITS.md](CREDITS.md) for provenance and the changes made here.
 
 ---
 

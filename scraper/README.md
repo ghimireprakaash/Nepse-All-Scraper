@@ -1,7 +1,10 @@
 # Nepsy Scraper
 
-Scrapes NEPSE market data from ShareSansar and Merolagani for 337 priority companies.
+Scrapes NEPSE market data from ShareSansar and Merolagani for 365 priority companies.
 All data is stored as CSV files in `data/` and auto-committed by GitHub Actions.
+
+> Originally based on [SamirWagle/Nepse-All-Scraper](https://github.com/SamirWagle/Nepse-All-Scraper).
+> See [../CREDITS.md](../CREDITS.md) for provenance and attribution.
 
 ---
 
