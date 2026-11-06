@@ -35,7 +35,7 @@ for **365 listed companies** — committed to this repo every trading day via Gi
 
 ---
 
-## �️ Repository Layout
+## 📁 Repository Layout
 
 ```
 Nepse-All-Scraper/
@@ -180,7 +180,7 @@ curl https://cdn.jsdelivr.net/gh/ghimireprakaash/Nepse-All-Scraper@main/data/com
 
 ---
 
-## � Data Formats
+## 📄 Data Formats
 
 <details>
 <summary><strong>prices.csv</strong></summary>
