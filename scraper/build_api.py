@@ -31,7 +31,7 @@ DOCS = ROOT / "docs"
 API = DOCS / "api"
 
 # Repo info for raw CSV links (override via env in CI).
-GH_USER = os.environ.get("GH_USER", "SamirWagle")
+GH_USER = os.environ.get("GH_USER", "ghimireprakaash")
 GH_REPO = os.environ.get("GH_REPO", "Nepse-All-Scraper")
 GH_BRANCH = os.environ.get("GH_BRANCH", "main")
 RAW_BASE = f"https://raw.githubusercontent.com/{GH_USER}/{GH_REPO}/{GH_BRANCH}"
